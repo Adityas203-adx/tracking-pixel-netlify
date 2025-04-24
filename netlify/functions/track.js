@@ -1,79 +1,87 @@
-const SUPABASE_URL = 'https://nandqoilqwsepborxkrz.supabase.co';
-const SUPABASE_API_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5hbmRxb2lscXdzZXBib3J4a3J6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUzNTkwODAsImV4cCI6MjA2MDkzNTA4MH0.FU7khFN_ESgFTFETWcyTytqcaCQFQzDB6LB5CzVQiOg'; // your full anon key
+const fetch = require('node-fetch');
 
-exports.handler = async function (event, context) {
+exports.handler = async (event, context) => {
   const params = event.queryStringParameters;
-  const headers = event.headers;
-
-  const user_id = params.id;
-  const eventName = params.event;
+  const user_id = params.id || 'anonymous';
+  const eventName = params.event || 'visit';
   const page_url = params.url || '';
-  const custom_metadata = params.meta ? JSON.parse(decodeURIComponent(params.meta)) : null;
+  const referrer = event.headers.referer || '';
+  const user_agent = event.headers['user-agent'] || '';
+  const ip_address =
+    event.headers['x-forwarded-for']?.split(',')[0] ||
+    event.headers['client-ip'] ||
+    'unknown';
 
-  if (!user_id || !eventName) {
-    return {
-      statusCode: 400,
-      body: 'Missing id or event',
-    };
-  }
+  const custom_metadata = {
+    timestamp: new Date().toISOString(),
+    lang: event.headers['accept-language'] || '',
+  };
 
-  const referrer = headers.referer || headers.referrer || '';
-  const user_agent = headers['user-agent'] || '';
-  const ip_address = headers['x-forwarded-for']?.split(',')[0] || '';
+  // Save to Supabase
+  await fetch('https://nandqoilqwsepborxkrz.supabase.co/rest/v1/events', {
+    method: 'POST',
+    headers: {
+      apikey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5hbmRxb2lscXdzZXBib3J4a3J6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUzNTkwODAsImV4cCI6MjA2MDkzNTA4MH0.FU7khFN_ESgFTFETWcyTytqcaCQFQzDB6LB5CzVQiOg',
+      Authorization:
+        'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5hbmRxb2lscXdzZXBib3J4a3J6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUzNTkwODAsImV4cCI6MjA2MDkzNTA4MH0.FU7khFN_ESgFTFETWcyTytqcaCQFQzDB6LB5CzVQiOg',
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify({
+      user_id,
+      event: eventName,
+      page_url,
+      referrer,
+      user_agent,
+      ip_address,
+      custom_metadata,
+    }),
+  });
 
-  // Get location info based on IP
-  let country = '';
-  let region = '';
-  let city = '';
+  // Send to GA4
+  await sendToGA4({
+    user_id,
+    event: eventName,
+    page_url,
+  });
 
-  try {
-    const geoRes = await fetch(`https://ipapi.co/${ip_address}/json/`);
-    const geoData = await geoRes.json();
-    country = geoData.country_name || '';
-    region = geoData.region || '';
-    city = geoData.city || '';
-  } catch (e) {
-    console.warn('Geolocation failed:', e.message);
-  }
+  return {
+    statusCode: 200,
+    body: 'Pixel tracked',
+  };
+};
 
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/events`, {
-      method: 'POST',
-      headers: {
-        'apikey': SUPABASE_API_KEY,
-        'Authorization': `Bearer ${SUPABASE_API_KEY}`,
-        'Content-Type': 'application/json',
-        'Prefer': 'return=minimal',
+// Send to GA4
+const sendToGA4 = async ({ user_id, event, page_url }) => {
+  const measurement_id = 'G-L2EXMRLXBT';
+  const api_secret = 'p7mHsi_yTd-nz20MDvrk3Q';
+
+  const payload = {
+    client_id: user_id || 'anon_' + Math.random().toString(36).substring(2),
+    events: [
+      {
+        name: event,
+        params: {
+          page_location: page_url,
+        },
       },
-      body: JSON.stringify({
-        user_id,
-        event: eventName,
-        page_url,
-        referrer,
-        user_agent,
-        ip_address,
-        country,
-        region,
-        city,
-        custom_metadata,
-        timestamp: new Date().toISOString(),
-      }),
-    });
+    ],
+  };
 
-    if (!res.ok) {
-      return {
-        statusCode: res.status,
-        body: `Supabase insert failed: ${await res.text()}`,
-      };
-    }
-
-    return {
-      statusCode: 204,
-    };
-  } catch (error) {
-    return {
-      statusCode: 500,
-      body: `Server error: ${error.message}`,
-    };
+  try {
+    await fetch(
+      `https://www.google-analytics.com/mp/collect?measurement_id=${measurement_id}&api_secret=${api_secret}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      }
+    );
+    console.log('✅ GA4 event sent');
+  } catch (err) {
+    console.error('❌ GA4 send failed:', err.message);
   }
 };
