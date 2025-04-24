@@ -7,11 +7,16 @@ exports.handler = async (event) => {
   // If 'meta' is present, encode it for URL compatibility
   const metaParam = meta ? `&meta=${encodeURIComponent(meta)}` : '';
 
+  // Fetch dynamic page details
+  const pageUrl = event.headers['x-forwarded-host'] + event.path;  // Full URL of the page where the pixel is loaded
+  const referrer = event.headers['referer'] || ''; // Referrer URL (if any)
+  const userAgent = event.headers['user-agent'];  // User agent string
+
   // Generate the JS code to load the pixel and send tracking data
   const js = `
     (function() {
       var img = new Image();
-      img.src = 'https://retarglow.com/.netlify/functions/track?id=${id}${metaParam}&event=visit';
+      img.src = 'https://retarglow.com/.netlify/functions/track?id=${id}${metaParam}&event=visit&page_url=${encodeURIComponent(pageUrl)}&referrer=${encodeURIComponent(referrer)}&user_agent=${encodeURIComponent(userAgent)}';
     })();
   `;
 
