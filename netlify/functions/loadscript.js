@@ -1,28 +1,27 @@
-exports.handler = async function (event, context) {
-  const { id } = event.queryStringParameters;
+// netlify/functions/loadscript.js
 
-  // Basic validation
-  if (!id) {
-    return {
-      statusCode: 400,
-      body: 'Missing ID in query parameters',
-    };
-  }
+exports.handler = async (event) => {
+  // Extract query parameters (id and meta) from the URL
+  const { id = 'anonymous', meta } = event.queryStringParameters || {};
 
-  // JavaScript that installs the tracking pixel
-  const script = `
+  // If 'meta' is present, encode it for URL compatibility
+  const metaParam = meta ? `&meta=${encodeURIComponent(meta)}` : '';
+
+  // Generate the JS code to load the pixel and send tracking data
+  const js = `
     (function() {
       var img = new Image();
-      img.src = 'https://retarget.netlify.app/.netlify/functions/track?id=${id}&event=visit';
+      img.src = 'https://retarglow.com/.netlify/functions/track?id=${id}${metaParam}&event=visit';
     })();
   `;
 
+  // Return the JS script with a 200 OK response
   return {
     statusCode: 200,
     headers: {
       'Content-Type': 'application/javascript',
-      'Cache-Control': 'no-store',
+      'Cache-Control': 'public, max-age=3600'
     },
-    body: script,
+    body: js
   };
 };
