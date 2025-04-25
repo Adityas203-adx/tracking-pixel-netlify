@@ -1,18 +1,19 @@
 const fetch = require('node-fetch');
 const { v4: uuidv4 } = require('uuid');
 
-const SUPABASE_URL = 'https://nandqoilqwsepborxkrz.supabase.co';
-const SUPABASE_API_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5hbmRxb2lscXdzZXBib3J4a3J6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUzNTkwODAsImV4cCI6MjA2MDkzNTA4MH0.FU7khFN_ESgFTFETWcyTytqcaCQFQzDB6LB5CzVQiOg';
+// Your Supabase project URL
+const SUPABASE_URL = 'https://nandqoilqwsepborxkrz.supabase.co'; // Replace with your Supabase URL
+const SUPABASE_API_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5hbmRxb2lscXdzZXBib3J4a3J6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUzNTkwODAsImV4cCI6MjA2MDkzNTA4MH0.FU7khFN_ESgFTFETWcyTytqcaCQFQzDB6LB5CzVQiOg'; // Replace with your Supabase API Key
 const TABLE_NAME = 'events';
 
-const GA4_MEASUREMENT_ID = 'G-L2EXMRLXBT';
-const GA4_API_SECRET = 'p7mHsi_yTd-nz20MDvrk3Q';
+const GA4_MEASUREMENT_ID = 'G-L2EXMRLXBT'; // Replace with your GA4 Measurement ID
+const GA4_API_SECRET = 'p7mHsi_yTd-nz20MDvrk3Q'; // Replace with your GA4 API Secret
 
 exports.handler = async (event) => {
   const params = event.queryStringParameters;
   const headers = event.headers;
 
-  // Parse cookies from the headers
+  // Parse cookies from headers
   const cookieHeader = headers.cookie || '';
   const cookies = Object.fromEntries(cookieHeader.split('; ').map(c => c.split('=')));
   let user_id = cookies.retarglow_id || params.id || 'anon_' + uuidv4();
