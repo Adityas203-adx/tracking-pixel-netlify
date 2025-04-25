@@ -9,18 +9,17 @@ const GA4_MEASUREMENT_ID = 'G-L2EXMRLXBT';
 const GA4_API_SECRET = 'p7mHsi_yTd-nz20MDvrk3Q';
 
 exports.handler = async (event) => {
-  const { queryStringParameters: params = {}, headers = {} } = event;
+  const params = event.queryStringParameters;
+  const headers = event.headers;
 
-  // Parse cookies into object
-  const cookies = Object.fromEntries(
-    (headers.cookie || '').split('; ').filter(Boolean).map(c => c.split('='))
-  );
+  // Parse cookies from the headers
+  const cookieHeader = headers.cookie || '';
+  const cookies = Object.fromEntries(cookieHeader.split('; ').map(c => c.split('=')));
+  let user_id = cookies.retarglow_id || params.id || 'anon_' + uuidv4();
 
-  // User ID logic
-  let user_id = cookies.retarglow_id || params.id || `anon_${uuidv4()}`;
-  const isNewUser = !cookies.retarglow_id;
-  const setCookieHeader = isNewUser
-    ? [`retarglow_id=${user_id}; Path=/; HttpOnly; Max-Age=31536000; SameSite=Lax`]
+  // Prepare Set-Cookie header if new user_id was generated
+  const setCookieHeader = !cookies.retarglow_id
+    ? [`retarglow_id=${user_id}; Path=/; HttpOnly; Max-Age=31536000`]
     : [];
 
   const eventName = params.event || 'visit';
@@ -35,11 +34,10 @@ exports.handler = async (event) => {
   const custom_metadata = {
     timestamp: new Date().toISOString(),
     lang: headers['accept-language'] || '',
-    user_agent,
   };
 
   try {
-    // Store event in Supabase
+    // Store in Supabase
     await fetch(`${SUPABASE_URL}/rest/v1/${TABLE_NAME}`, {
       method: 'POST',
       headers: {
@@ -59,16 +57,16 @@ exports.handler = async (event) => {
       }),
     });
 
-    // Send event to Google Analytics 4
+    // Send to GA4
     await sendToGA4({ user_id, event: eventName, page_url });
 
     return {
       statusCode: 200,
-      headers: isNewUser ? { 'Set-Cookie': setCookieHeader[0] } : {},
-      body: '✅ Pixel tracked successfully',
+      headers: setCookieHeader.length > 0 ? { 'Set-Cookie': setCookieHeader[0] } : {},
+      body: 'Pixel tracked with session',
     };
   } catch (err) {
-    console.error('❌ Error tracking event:', err);
+    console.error('❌ Tracking failed:', err.message);
     return {
       statusCode: 500,
       body: JSON.stringify({ error: 'Tracking failed' }),
@@ -76,7 +74,7 @@ exports.handler = async (event) => {
   }
 };
 
-// Send GA4 event
+// Send to GA4
 async function sendToGA4({ user_id, event, page_url }) {
   const payload = {
     client_id: user_id,
