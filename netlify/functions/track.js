@@ -1,100 +1,75 @@
-const fetch = require('node-fetch');
-const { v4: uuidv4 } = require('uuid');
+// Supabase and GA4 Credentials
+const SUPABASE_URL = 'https://nandqoilqwsepborxkrz.supabase.co';
+const SUPABASE_API_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5hbmRxb2lscXdzZXBib3J4a3J6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUzNTkwODAsImV4cCI6MjA2MDkzNTA4MH0.FU7khFN_ESgFTFETWcyTytqcaCQFQzDB6LB5CzVQiOg';
+const GA4_MEASUREMENT_ID = 'G-L2EXMRLXBT';
+const GA4_API_SECRET = 'p7mHsi_yTd-nz20MDvrk3Q';
 
-// Your Supabase project URL
-const SUPABASE_URL = 'https://nandqoilqwsepborxkrz.supabase.co'; // Replace with your Supabase URL
-const SUPABASE_API_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5hbmRxb2lscXdzZXBib3J4a3J6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUzNTkwODAsImV4cCI6MjA2MDkzNTA4MH0.FU7khFN_ESgFTFETWcyTytqcaCQFQzDB6LB5CzVQiOg'; // Replace with your Supabase API Key
-const TABLE_NAME = 'events';
+// Function to send tracking data to Supabase
+async function sendTrackingData(eventData) {
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/track_events`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_API_KEY, // Supabase API Key
+        'Authorization': `Bearer ${SUPABASE_API_KEY}` // Supabase Bearer Token
+      },
+      body: JSON.stringify(eventData)
+    });
 
-const GA4_MEASUREMENT_ID = 'G-L2EXMRLXBT'; // Replace with your GA4 Measurement ID
-const GA4_API_SECRET = 'p7mHsi_yTd-nz20MDvrk3Q'; // Replace with your GA4 API Secret
+    if (response.ok) {
+      console.log('Tracking data sent to Supabase successfully!');
+    } else {
+      console.error('Error sending data to Supabase:', response.statusText);
+    }
+  } catch (error) {
+    console.error('Error:', error);
+  }
+}
 
-exports.handler = async (event) => {
-  const params = event.queryStringParameters;
-  const headers = event.headers;
-
-  // Parse cookies from headers
-  const cookieHeader = headers.cookie || '';
-  const cookies = Object.fromEntries(cookieHeader.split('; ').map(c => c.split('=')));
-  let user_id = cookies.retarglow_id || params.id || 'anon_' + uuidv4();
-
-  // Prepare Set-Cookie header if new user_id was generated
-  const setCookieHeader = !cookies.retarglow_id
-    ? [`retarglow_id=${user_id}; Path=/; HttpOnly; Max-Age=31536000`]
-    : [];
-
-  const eventName = params.event || 'visit';
-  const page_url = params.page_url || headers.referer || '';
-  const referrer = headers.referer || '';
-  const user_agent = headers['user-agent'] || '';
-  const ip_address =
-    headers['x-forwarded-for']?.split(',')[0] ||
-    headers['client-ip'] ||
-    'unknown';
-
-  const custom_metadata = {
-    timestamp: new Date().toISOString(),
-    lang: headers['accept-language'] || '',
+// Function to send event data to GA4
+async function sendToGA4(eventData) {
+  const payload = {
+    client_id: eventData.client_id, // Assuming you have this from your website
+    events: [
+      {
+        name: eventData.event,
+        params: {
+          ...eventData.params
+        }
+      }
+    ]
   };
 
   try {
-    // Store in Supabase
-    await fetch(`${SUPABASE_URL}/rest/v1/${TABLE_NAME}`, {
+    const response = await fetch(`https://www.google-analytics.com/mp/collect?measurement_id=${GA4_MEASUREMENT_ID}&api_secret=${GA4_API_SECRET}`, {
       method: 'POST',
       headers: {
-        apikey: SUPABASE_API_KEY,
-        Authorization: `Bearer ${SUPABASE_API_KEY}`,
-        'Content-Type': 'application/json',
-        Prefer: 'return=minimal',
+        'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        user_id,
-        event: eventName,
-        page_url,
-        referrer,
-        user_agent,
-        ip_address,
-        custom_metadata,
-      }),
+      body: JSON.stringify(payload)
     });
 
-    // Send to GA4
-    await sendToGA4({ user_id, event: eventName, page_url });
+    if (response.ok) {
+      console.log('Event sent to GA4 successfully!');
+    } else {
+      console.error('Error sending data to GA4:', response.statusText);
+    }
+  } catch (error) {
+    console.error('Error:', error);
+  }
+}
 
-    return {
-      statusCode: 200,
-      headers: setCookieHeader.length > 0 ? { 'Set-Cookie': setCookieHeader[0] } : {},
-      body: 'Pixel tracked with session',
-    };
-  } catch (err) {
-    console.error('❌ Tracking failed:', err.message);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: 'Tracking failed' }),
-    };
+// Example: Track page view
+const eventData = {
+  client_id: 'YOUR_CLIENT_ID', // You should dynamically fetch this (e.g., from cookies)
+  event: 'page_view',
+  params: {
+    page_path: window.location.pathname,
+    page_title: document.title
   }
 };
 
-// Send to GA4
-async function sendToGA4({ user_id, event, page_url }) {
-  const payload = {
-    client_id: user_id,
-    events: [
-      {
-        name: event,
-        params: {
-          page_location: page_url,
-        },
-      },
-    ],
-  };
-
-  await fetch(
-    `https://www.google-analytics.com/mp/collect?measurement_id=${GA4_MEASUREMENT_ID}&api_secret=${GA4_API_SECRET}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    }
-  );
-}
+// Send data to both Supabase and GA4
+sendTrackingData(eventData);
+sendToGA4(eventData);
