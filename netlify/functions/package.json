@@ -1,0 +1,9 @@
+{
+  "name": "retarglow-pixel",
+  "version": "1.0.0",
+  "dependencies": {
+    "uuid": "^9.0.0",
+    "node-fetch": "^3.3.2"
+  },
+  "type": "module"
+}
