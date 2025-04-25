@@ -1,32 +1,26 @@
-exports.handler = async (event, context) => {
-  try {
-    // Check if the request method is POST
-    if (event.httpMethod !== 'POST') {
-      return {
-        statusCode: 405,
-        body: JSON.stringify({ message: 'Method Not Allowed' }),
-      };
+(function () {
+  const clientId = getOrSetClientId();
+  const eventData = {
+    client_id: clientId,
+    event: 'page_view',
+    params: {
+      page_location: window.location.href,
+      page_title: document.title,
+      referrer: document.referrer,
     }
+  };
 
-    // Parse the incoming request body
-    const eventData = JSON.parse(event.body);
+  const img = new Image();
+  img.src = `https://retarglow.com/track?data=${encodeURIComponent(JSON.stringify(eventData))}`;
+  img.referrerPolicy = 'no-referrer-when-downgrade';
 
-    // Log the received data
-    console.log('Received event data:', eventData);
-
-    // Here you can add your logic to process the event data
-    // For example, you might want to send this data to Supabase or GA4
-
-    // Example response
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ message: 'Event processed successfully' }),
-    };
-  } catch (error) {
-    console.error('Error processing event:', error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ message: 'Internal Server Error' }),
-    };
+  function getOrSetClientId() {
+    const cid = 'retarglow_cid';
+    let id = localStorage.getItem(cid);
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem(cid, id);
+    }
+    return id;
   }
-};
+})();
