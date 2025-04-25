@@ -3,14 +3,21 @@
   const COOKIE_EXPIRY_DAYS = 365;
 
   function getCookie(name) {
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return parts.pop().split(';').shift();
+    // Check if running in a browser environment
+    if (typeof document !== 'undefined') {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return parts.pop().split(';').shift();
+    }
+    return null; // Return null if not in a browser
   }
 
   function setCookie(name, value, days) {
-    const expires = new Date(Date.now() + days * 864e5).toUTCString();
-    document.cookie = `${name}=${value}; expires=${expires}; path=/; SameSite=Lax`;
+    // Check if running in a browser environment
+    if (typeof document !== 'undefined') {
+      const expires = new Date(Date.now() + days * 864e5).toUTCString();
+      document.cookie = `${name}=${value}; expires=${expires}; path=/; SameSite=Lax`;
+    }
   }
 
   function generateId() {
@@ -25,17 +32,19 @@
   }
 
   // Build query parameters for the tracking pixel URL
-  const page_url = encodeURIComponent(window.location.href);
-  const referrer = encodeURIComponent(document.referrer || '');
-  const user_agent = encodeURIComponent(navigator.userAgent);
+  const page_url = encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '');
+  const referrer = encodeURIComponent(typeof document !== 'undefined' ? document.referrer || '' : '');
+  const user_agent = encodeURIComponent(typeof navigator !== 'undefined' ? navigator.userAgent : '');
 
   // Send tracking data to your Netlify function (no need for Supabase or GA4 keys here)
   const pixelUrl = `https://retarglow.com/.netlify/functions/track?id=${userId}&event=visit&page_url=${page_url}&referrer=${referrer}&user_agent=${user_agent}`;
 
   // Fire tracking pixel (sending data to the Netlify function)
   try {
-    const img = new Image();
-    img.src = pixelUrl;
+    if (typeof window !== 'undefined') {
+      const img = new Image();
+      img.src = pixelUrl;
+    }
   } catch (err) {
     console.error('Pixel tracking failed:', err);
   }
