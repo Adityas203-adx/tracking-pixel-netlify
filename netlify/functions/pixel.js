@@ -35,7 +35,17 @@
   try {
     const img = new Image();
     img.src = pixelUrl;
+
+    // Optional: Check if the image is loaded successfully
+    img.onload = function () {
+      console.log('Pixel tracking request sent successfully');
+    };
+
+    // Handle error if the pixel fails to load
+    img.onerror = function (err) {
+      console.error('Pixel tracking failed:', err);
+    };
   } catch (err) {
-    console.error('Pixel tracking failed:', err);
+    console.error('Error sending tracking pixel:', err);
   }
 })();
