@@ -11,8 +11,8 @@ async function sendTrackingData(eventData) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'apikey': SUPABASE_API_KEY, // Supabase API Key
-        'Authorization': `Bearer ${SUPABASE_API_KEY}` // Supabase Bearer Token
+        'apikey': SUPABASE_API_KEY,
+        'Authorization': `Bearer ${SUPABASE_API_KEY}`
       },
       body: JSON.stringify(eventData)
     });
@@ -30,7 +30,7 @@ async function sendTrackingData(eventData) {
 // Function to send event data to GA4
 async function sendToGA4(eventData) {
   const payload = {
-    client_id: eventData.client_id, // Assuming you have this from your website
+    client_id: eventData.client_id,
     events: [
       {
         name: eventData.event,
@@ -61,15 +61,17 @@ async function sendToGA4(eventData) {
 }
 
 // Example: Track page view
-const eventData = {
-  client_id: 'YOUR_CLIENT_ID', // You should dynamically fetch this (e.g., from cookies)
-  event: 'page_view',
-  params: {
-    page_path: window.location.pathname,
-    page_title: document.title
-  }
-};
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+  const eventData = {
+    client_id: 'YOUR_CLIENT_ID', // Fetch this dynamically
+    event: 'page_view',
+    params: {
+      page_path: window.location.pathname,
+      page_title: document.title
+    }
+  };
 
-// Send data to both Supabase and GA4
-sendTrackingData(eventData);
-sendToGA4(eventData);
+  // Send data to both Supabase and GA4
+  sendTrackingData(eventData);
+  sendToGA4(eventData);
+}
