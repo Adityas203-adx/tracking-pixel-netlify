@@ -1,64 +1,83 @@
 const fetch = require('node-fetch');
+const { v4: uuidv4 } = require('uuid');
 
-exports.handler = async (event, context) => {
+const SUPABASE_URL = 'https://nandqoilqwsepborxkrz.supabase.co';
+const SUPABASE_API_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5hbmRxb2lscXdzZXBib3J4a3J6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUzNTkwODAsImV4cCI6MjA2MDkzNTA4MH0.FU7khFN_ESgFTFETWcyTytqcaCQFQzDB6LB5CzVQiOg';
+const TABLE_NAME = 'events';
+
+const GA4_MEASUREMENT_ID = 'G-L2EXMRLXBT';
+const GA4_API_SECRET = 'p7mHsi_yTd-nz20MDvrk3Q';
+
+exports.handler = async (event) => {
   const params = event.queryStringParameters;
-  const user_id = params.id || 'anonymous';
+  const headers = event.headers;
+
+  // Parse cookies
+  const cookieHeader = headers.cookie || '';
+  const cookies = Object.fromEntries(cookieHeader.split('; ').map(c => c.split('=')));
+  let user_id = cookies.retarglow_id || params.id || 'anon_' + uuidv4();
+
+  // Prepare Set-Cookie header if new user_id was generated
+  const setCookieHeader = !cookies.retarglow_id
+    ? [`retarglow_id=${user_id}; Path=/; HttpOnly; Max-Age=31536000`]
+    : [];
+
   const eventName = params.event || 'visit';
-  const page_url = params.url || '';
-  const referrer = event.headers.referer || '';
-  const user_agent = event.headers['user-agent'] || '';
+  const page_url = params.page_url || headers.referer || '';
+  const referrer = headers.referer || '';
+  const user_agent = headers['user-agent'] || '';
   const ip_address =
-    event.headers['x-forwarded-for']?.split(',')[0] ||
-    event.headers['client-ip'] ||
+    headers['x-forwarded-for']?.split(',')[0] ||
+    headers['client-ip'] ||
     'unknown';
 
   const custom_metadata = {
     timestamp: new Date().toISOString(),
-    lang: event.headers['accept-language'] || '',
+    lang: headers['accept-language'] || '',
   };
 
-  // Save to Supabase
-  await fetch('https://nandqoilqwsepborxkrz.supabase.co/rest/v1/events', {
-    method: 'POST',
-    headers: {
-      apikey:
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5hbmRxb2lscXdzZXBib3J4a3J6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUzNTkwODAsImV4cCI6MjA2MDkzNTA4MH0.FU7khFN_ESgFTFETWcyTytqcaCQFQzDB6LB5CzVQiOg',
-      Authorization:
-        'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5hbmRxb2lscXdzZXBib3J4a3J6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUzNTkwODAsImV4cCI6MjA2MDkzNTA4MH0.FU7khFN_ESgFTFETWcyTytqcaCQFQzDB6LB5CzVQiOg',
-      'Content-Type': 'application/json',
-      Prefer: 'return=minimal',
-    },
-    body: JSON.stringify({
-      user_id,
-      event: eventName,
-      page_url,
-      referrer,
-      user_agent,
-      ip_address,
-      custom_metadata,
-    }),
-  });
+  try {
+    // Store in Supabase
+    await fetch(`${SUPABASE_URL}/rest/v1/${TABLE_NAME}`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_API_KEY,
+        Authorization: `Bearer ${SUPABASE_API_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({
+        user_id,
+        event: eventName,
+        page_url,
+        referrer,
+        user_agent,
+        ip_address,
+        custom_metadata,
+      }),
+    });
 
-  // Send to GA4
-  await sendToGA4({
-    user_id,
-    event: eventName,
-    page_url,
-  });
+    // Send to GA4
+    await sendToGA4({ user_id, event: eventName, page_url });
 
-  return {
-    statusCode: 200,
-    body: 'Pixel tracked',
-  };
+    return {
+      statusCode: 200,
+      headers: setCookieHeader.length > 0 ? { 'Set-Cookie': setCookieHeader[0] } : {},
+      body: 'Pixel tracked with session',
+    };
+  } catch (err) {
+    console.error('❌ Tracking failed:', err.message);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: 'Tracking failed' }),
+    };
+  }
 };
 
 // Send to GA4
-const sendToGA4 = async ({ user_id, event, page_url }) => {
-  const measurement_id = 'G-L2EXMRLXBT';
-  const api_secret = 'p7mHsi_yTd-nz20MDvrk3Q';
-
+async function sendToGA4({ user_id, event, page_url }) {
   const payload = {
-    client_id: user_id || 'anon_' + Math.random().toString(36).substring(2),
+    client_id: user_id,
     events: [
       {
         name: event,
@@ -69,19 +88,12 @@ const sendToGA4 = async ({ user_id, event, page_url }) => {
     ],
   };
 
-  try {
-    await fetch(
-      `https://www.google-analytics.com/mp/collect?measurement_id=${measurement_id}&api_secret=${api_secret}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      }
-    );
-    console.log('✅ GA4 event sent');
-  } catch (err) {
-    console.error('❌ GA4 send failed:', err.message);
-  }
-};
+  await fetch(
+    `https://www.google-analytics.com/mp/collect?measurement_id=${GA4_MEASUREMENT_ID}&api_secret=${GA4_API_SECRET}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }
+  );
+}
